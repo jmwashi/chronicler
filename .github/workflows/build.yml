@@ -15,11 +15,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            script: build:win
+            builder_args: --win
           - os: macos-latest
-            script: build:mac
+            builder_args: --mac
           - os: ubuntu-latest
-            script: build:linux
+            builder_args: --linux
 
     runs-on: ${{ matrix.os }}
 
@@ -33,7 +33,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run ${{ matrix.script }}
+      - run: npx electron-vite build && npx electron-builder ${{ matrix.builder_args }} --publish never
 
       - uses: actions/upload-artifact@v4
         with:
