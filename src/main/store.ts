@@ -4,8 +4,16 @@ import { ipcMain } from 'electron'
 const schema = {
   campaigns:   { type: 'array',  default: [] },
   characters:  { type: 'array',  default: [] },
-  events:      { type: 'array',  default: [] },
+  lore:        { type: 'array',  default: [] },
   notes:       { type: 'array',  default: [] },
+  documents:   { type: 'array',  default: [] },
+  items:       { type: 'array',  default: [] },
+  locations:   { type: 'array',  default: [] },
+  factions:    { type: 'array',  default: [] },
+  tags:        { type: 'array',  default: [] },
+  sessions:    { type: 'array',  default: [] },
+  scenes:      { type: 'array',  default: [] },
+  gameRules:   { type: 'array',  default: [] },
   preferences: { type: 'object', default: { theme: 'dark' } }
 } as const
 
