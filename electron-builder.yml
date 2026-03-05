@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: chronicler
+appId: com.chronicler.app
+productName: Chronicler
 directories:
   buildResources: build
 files:
@@ -13,6 +13,12 @@ asarUnpack:
   - resources/**
 win:
   executableName: chronicler
+  signAndEditExecutable: false
+  target:
+    - nsis
+    - portable
+portable:
+  artifactName: ${name}-${version}-portable.${ext}
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -33,7 +39,7 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: jmwas
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}

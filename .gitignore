@@ -1,6 +1,8 @@
 node_modules
 dist
 out
+release
+.claude/
 .DS_Store
 .eslintcache
 *.log*
