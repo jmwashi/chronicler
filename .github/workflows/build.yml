@@ -1,10 +1,13 @@
-name: Build
+name: Build & Release
 
 on:
   workflow_dispatch:
   push:
     tags:
       - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -15,6 +18,8 @@ jobs:
             script: build:win
           - os: macos-latest
             script: build:mac
+          - os: ubuntu-latest
+            script: build:linux
 
     runs-on: ${{ matrix.os }}
 
@@ -37,4 +42,31 @@ jobs:
             dist/*.exe
             dist/*.dmg
             dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.snap
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.snap
