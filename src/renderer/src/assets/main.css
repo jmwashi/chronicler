@@ -72,3 +72,22 @@ body {
   color: hsl(var(--foreground));
   font-feature-settings: "rlig" 1, "calt" 1;
 }
+
+/* Force native select dropdowns to respect dark/light theme */
+[data-theme="dark"] select {
+  color-scheme: dark;
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+[data-theme="parchment"] select {
+  color-scheme: light;
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+[data-theme="dark"] option,
+[data-theme="dark"] optgroup {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
