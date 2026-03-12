@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type ReactElement, useEffect, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useSessionStore } from '@/store/sessionStore'
@@ -10,9 +10,10 @@ import { PlanningTab } from './PlanningTab'
 import { ReferencePanel } from './ReferencePanel'
 import { SceneDetail } from './SceneDetail'
 import { InitiativeTracker } from './InitiativeTracker'
+import { ImprovToolTab } from './ImprovToolTab'
 import type { Session, Scene } from '@/types'
 
-export default function SessionDetail() {
+export default function SessionDetail(): ReactElement {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -51,7 +52,7 @@ export default function SessionDetail() {
   const sessionScenes = scenes.filter((sc) => sc.sessionId === session.id)
   const nextSceneOrder = sessionScenes.reduce((max, sc) => Math.max(max, sc.order), -1) + 1
 
-  const handleSelectScene = (sceneId: string | null) => {
+  const handleSelectScene = (sceneId: string | null): void => {
     if (sceneId) {
       setSearchParams({ scene: sceneId })
     } else {
@@ -59,16 +60,16 @@ export default function SessionDetail() {
     }
   }
 
-  const handleUpdateSession = async (updated: Session) => {
+  const handleUpdateSession = async (updated: Session): Promise<void> => {
     await update(updated)
   }
 
-  const handleEditSave = async (updated: Session) => {
+  const handleEditSave = async (updated: Session): Promise<void> => {
     await update(updated)
     setEditModalOpen(false)
   }
 
-  const handleAddScene = async () => {
+  const handleAddScene = async (): Promise<void> => {
     const now = new Date().toISOString()
     const newScene: Scene = {
       id: crypto.randomUUID(),
@@ -88,16 +89,16 @@ export default function SessionDetail() {
     setSearchParams({ scene: newScene.id })
   }
 
-  const handleUpdateScene = async (scene: Scene) => {
+  const handleUpdateScene = async (scene: Scene): Promise<void> => {
     await useSceneStore.getState().update(scene)
   }
 
-  const handleRemoveScene = async (sceneId: string) => {
+  const handleRemoveScene = async (sceneId: string): Promise<void> => {
     await useSceneStore.getState().remove(sceneId)
     setSearchParams({})
   }
 
-  const renderMainContent = () => {
+  const renderMainContent = (): ReactElement | null => {
     if (activeSceneId) {
       const scene = sessionScenes.find((sc) => sc.id === activeSceneId)
       if (!scene) {
@@ -124,6 +125,8 @@ export default function SessionDetail() {
             <PlanningTab session={session} onUpdateSession={handleUpdateSession} />
           </div>
         )
+      case 'improv':
+        return <ImprovToolTab session={session} />
       case 'initiative':
         return (
           <div className="p-4">
@@ -177,11 +180,7 @@ export default function SessionDetail() {
       )}
 
       {/* Edit session metadata modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        title="Edit Session"
-      >
+      <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Session">
         <SessionForm
           key={session.id}
           session={session}
@@ -190,7 +189,6 @@ export default function SessionDetail() {
           onCancel={() => setEditModalOpen(false)}
         />
       </Modal>
-
     </div>
   )
 }
