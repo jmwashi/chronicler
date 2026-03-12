@@ -10,6 +10,7 @@ import { PlanningTab } from './PlanningTab'
 import { ReferencePanel } from './ReferencePanel'
 import { SceneDetail } from './SceneDetail'
 import { InitiativeTracker } from './InitiativeTracker'
+import { ImprovToolTab } from './ImprovToolTab'
 import type { Session, Scene } from '@/types'
 
 export default function SessionDetail() {
@@ -130,6 +131,16 @@ export default function SessionDetail() {
             <InitiativeTracker session={session} onUpdateSession={handleUpdateSession} />
           </div>
         )
+      case 'improv': {
+        const activeScene = activeSceneId
+          ? (sessionScenes.find((sc) => sc.id === activeSceneId) ?? null)
+          : null
+        return (
+          <div className="p-4">
+            <ImprovToolTab session={session} activeScene={activeScene} />
+          </div>
+        )
+      }
       default:
         return null
     }
@@ -177,11 +188,7 @@ export default function SessionDetail() {
       )}
 
       {/* Edit session metadata modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        title="Edit Session"
-      >
+      <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Session">
         <SessionForm
           key={session.id}
           session={session}
@@ -190,7 +197,6 @@ export default function SessionDetail() {
           onCancel={() => setEditModalOpen(false)}
         />
       </Modal>
-
     </div>
   )
 }
