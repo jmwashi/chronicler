@@ -1,5 +1,8 @@
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { buildImprovContext, getDefaultImprovEntityRefs } from '@/lib/improv/context'
+import { generateImprovDetails } from '@/lib/improv/generate'
+import type { ImprovDetailRequest, ImprovEntityKind, ImprovEntityRef } from '@/lib/improv/types'
 import { useCharacterStore } from '@/store/characterStore'
 import { useFactionStore } from '@/store/factionStore'
 import { useItemStore } from '@/store/itemStore'
@@ -7,9 +10,6 @@ import { useLocationStore } from '@/store/locationStore'
 import { useLoreStore } from '@/store/loreStore'
 import { useNoteStore } from '@/store/noteStore'
 import { useSceneStore } from '@/store/sceneStore'
-import { buildImprovContext, getDefaultImprovEntityRefs } from '@/lib/improv/context'
-import { generateTavernImprov } from '@/lib/improv/generate'
-import type { ImprovEntityKind, ImprovEntityRef, TavernScenarioInput } from '@/lib/improv/types'
 import type { Scene, Session } from '@/types'
 
 interface Props {
@@ -32,16 +32,15 @@ function refKey(ref: ImprovEntityRef): string {
 }
 
 export function ImprovToolTab({ session, activeScene }: Props): ReactElement {
-  const [scenario, setScenario] = useState<TavernScenarioInput>({
-    tavern: 'The Broken Cask',
-    bartender: 'Warm smile, sharp memory, sees everything',
-    suspiciousPatron: 'A soaked courier clutching a signet ring',
-    rumor: 'A noble heir vanished after meeting smugglers upstairs',
-    complication: 'An undercover faction agent is already watching the room'
+  const [request, setRequest] = useState<ImprovDetailRequest>({
+    subject: 'a random bar the party just entered',
+    playerIntent: 'find someone who knows about a missing caravan',
+    tone: 'gritty but lively',
+    scale: 'quick drop-in details for 3-5 minutes of interaction',
+    constraints: 'keep it grounded and avoid combat unless pushed'
   })
-
   const [selectedRefKeys, setSelectedRefKeys] = useState<string[]>([])
-  const [result, setResult] = useState<Awaited<ReturnType<typeof generateTavernImprov>> | null>(
+  const [result, setResult] = useState<Awaited<ReturnType<typeof generateImprovDetails>> | null>(
     null
   )
   const [isGenerating, setIsGenerating] = useState(false)
@@ -116,6 +115,7 @@ export function ImprovToolTab({ session, activeScene }: Props): ReactElement {
     const [kind, id] = value.split(':')
     return { kind: kind as ImprovEntityKind, id }
   })
+
   const contextEntities = useMemo(
     () => buildImprovContext(world, contextRefs),
     [contextRefs, world]
@@ -131,40 +131,42 @@ export function ImprovToolTab({ session, activeScene }: Props): ReactElement {
     )
   }, [contextOptions])
 
-  const toggleRef = (ref: ImprovEntityRef) => {
+  const toggleRef = (ref: ImprovEntityRef): void => {
     const key = refKey(ref)
     setSelectedRefKeys((current) =>
       current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key]
     )
   }
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (): Promise<void> => {
     setIsGenerating(true)
-    setResult(await generateTavernImprov(scenario, contextEntities))
+    setResult(await generateImprovDetails(request, contextEntities))
     setIsGenerating(false)
   }
 
   return (
     <div className="space-y-4">
       <div className="rounded-lg border p-3" style={{ borderColor: 'hsl(var(--border))' }}>
-        <h3 className="text-sm font-semibold">Scenario-first improv flow</h3>
+        <h3 className="text-sm font-semibold">On-the-fly detail generator</h3>
         <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          Seed one tavern setup quickly, then generate table-ready beats for immediate DM use.
+          Use this when players do something unplanned. It generates descriptive details you can
+          narrate immediately (not a scripted scene).
         </p>
+
         <div className="grid md:grid-cols-2 gap-3 mt-3">
           {[
-            { key: 'tavern', label: 'Tavern' },
-            { key: 'bartender', label: 'Bartender' },
-            { key: 'suspiciousPatron', label: 'Suspicious patron' },
-            { key: 'rumor', label: 'Rumor' },
-            { key: 'complication', label: 'Complication' }
+            { key: 'subject', label: 'What are they interacting with?' },
+            { key: 'playerIntent', label: 'What do players want from it?' },
+            { key: 'tone', label: 'Tone / vibe' },
+            { key: 'scale', label: 'How big should this be?' },
+            { key: 'constraints', label: 'Constraints (optional)', wide: true }
           ].map((field) => (
-            <label key={field.key} className={field.key === 'complication' ? 'md:col-span-2' : ''}>
+            <label key={field.key} className={field.wide ? 'md:col-span-2' : ''}>
               <div className="text-xs font-medium mb-1">{field.label}</div>
               <input
-                value={scenario[field.key as keyof TavernScenarioInput]}
+                value={request[field.key as keyof ImprovDetailRequest]}
                 onChange={(e) =>
-                  setScenario((current) => ({
+                  setRequest((current) => ({
                     ...current,
                     [field.key]: e.target.value
                   }))
@@ -182,18 +184,18 @@ export function ImprovToolTab({ session, activeScene }: Props): ReactElement {
 
       <div className="rounded-lg border p-3" style={{ borderColor: 'hsl(var(--border))' }}>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Context selector</h3>
+          <h3 className="text-sm font-semibold">Optional world context</h3>
           <button
             onClick={() => setSelectedRefKeys(defaultRefKeys)}
             className="text-xs underline"
             style={{ color: 'hsl(var(--primary))' }}
           >
-            Reset to session references
+            Reset to session defaults
           </button>
         </div>
         <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          Defaults include referenced entities and the active scene, but you can pull from any world
-          entity.
+          Pull in only what you need for grounding. Defaults come from session references + active
+          scene.
         </p>
 
         <div className="grid md:grid-cols-2 gap-x-4 gap-y-3 mt-3">
@@ -228,7 +230,7 @@ export function ImprovToolTab({ session, activeScene }: Props): ReactElement {
 
       <div className="rounded-lg border p-3" style={{ borderColor: 'hsl(var(--border))' }}>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Generated live beats</h3>
+          <h3 className="text-sm font-semibold">Generated details for narration</h3>
           <button
             onClick={handleGenerate}
             disabled={isGenerating}
@@ -238,62 +240,59 @@ export function ImprovToolTab({ session, activeScene }: Props): ReactElement {
               color: 'hsl(var(--primary-foreground))'
             }}
           >
-            {isGenerating ? 'Generating…' : 'Generate improv beats'}
+            {isGenerating ? 'Generating…' : 'Generate details'}
           </button>
         </div>
 
         {result ? (
-          <div className="grid md:grid-cols-2 gap-3 mt-3 text-sm">
+          <div className="space-y-3 mt-3 text-sm">
             <div>
-              <h4 className="text-xs font-semibold mb-1">Dialogue opener</h4>
-              <p>{result.dialogueOpener}</p>
+              <h4 className="text-xs font-semibold mb-1">Read-aloud opener</h4>
+              <p>{result.openingDescription}</p>
             </div>
+
             <div>
-              <h4 className="text-xs font-semibold mb-1">Motive</h4>
-              <p>{result.motive}</p>
+              <h4 className="text-xs font-semibold mb-1">Sensory details</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {result.sensoryDetails.map((entry) => (
+                  <li key={entry}>{entry}</li>
+                ))}
+              </ul>
             </div>
+
             <div>
-              <h4 className="text-xs font-semibold mb-1">Secret</h4>
-              <p>{result.secret}</p>
+              <h4 className="text-xs font-semibold mb-1">Notable features</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {result.notableFeatures.map((entry) => (
+                  <li key={entry}>{entry}</li>
+                ))}
+              </ul>
             </div>
+
             <div>
-              <h4 className="text-xs font-semibold mb-1">Escalation beat</h4>
-              <p>{result.escalationBeat}</p>
+              <h4 className="text-xs font-semibold mb-1">Immediate opportunities</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                {result.immediateOpportunities.map((entry) => (
+                  <li key={entry}>{entry}</li>
+                ))}
+              </ul>
             </div>
-            <div className="md:col-span-2">
-              <h4 className="text-xs font-semibold mb-1">Fallback beat</h4>
-              <p>{result.fallbackBeat}</p>
+
+            <div>
+              <h4 className="text-xs font-semibold mb-1">Hidden twist (hold back or reveal)</h4>
+              <p>{result.hiddenTwist}</p>
             </div>
-            <div
-              className="md:col-span-2 text-xs"
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-            >
+
+            <div className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
               {result.usedFallback ? 'Fallback mode' : 'LLM mode'} · {result.diagnostics}
             </div>
           </div>
         ) : (
           <p className="text-xs mt-3" style={{ color: 'hsl(var(--muted-foreground))' }}>
-            Generate to receive a dialogue opener, motive, secret, escalation, and fallback beat.
+            Generate to get descriptive details you can narrate immediately when players go
+            off-script.
           </p>
         )}
-      </div>
-
-      <div className="rounded-lg border p-3" style={{ borderColor: 'hsl(var(--border))' }}>
-        <h3 className="text-sm font-semibold">Context preview</h3>
-        <ul className="mt-2 space-y-1 text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          {contextEntities.length === 0 ? (
-            <li>No selected context facts.</li>
-          ) : (
-            contextEntities.map((entry) => (
-              <li key={`${entry.kind}-${entry.id}`}>
-                <strong>
-                  [{entry.kind}] {entry.name}:
-                </strong>{' '}
-                {entry.summary}
-              </li>
-            ))
-          )}
-        </ul>
       </div>
     </div>
   )

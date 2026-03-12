@@ -1,5 +1,5 @@
 import { formatImprovFacts } from './context'
-import type { ImprovContextEntity, ImprovGenerationResult, TavernScenarioInput } from './types'
+import type { ImprovContextEntity, ImprovDetailRequest, ImprovDetailResult } from './types'
 
 interface LlmConfig {
   baseUrl: string
@@ -7,26 +7,41 @@ interface LlmConfig {
   model: string
 }
 
-const RESPONSE_KEYS: Array<keyof Omit<ImprovGenerationResult, 'usedFallback' | 'diagnostics'>> = [
-  'dialogueOpener',
-  'motive',
-  'secret',
-  'escalationBeat',
-  'fallbackBeat'
+const schemaKeys: Array<keyof Omit<ImprovDetailResult, 'usedFallback' | 'diagnostics'>> = [
+  'openingDescription',
+  'sensoryDetails',
+  'notableFeatures',
+  'immediateOpportunities',
+  'hiddenTwist'
 ]
 
-const improvJsonSchema = {
-  name: 'improv_tavern_scene',
+const detailJsonSchema = {
+  name: 'improv_detail_generator',
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: RESPONSE_KEYS,
+    required: schemaKeys,
     properties: {
-      dialogueOpener: { type: 'string' },
-      motive: { type: 'string' },
-      secret: { type: 'string' },
-      escalationBeat: { type: 'string' },
-      fallbackBeat: { type: 'string' }
+      openingDescription: { type: 'string' },
+      sensoryDetails: {
+        type: 'array',
+        minItems: 3,
+        maxItems: 5,
+        items: { type: 'string' }
+      },
+      notableFeatures: {
+        type: 'array',
+        minItems: 3,
+        maxItems: 6,
+        items: { type: 'string' }
+      },
+      immediateOpportunities: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 4,
+        items: { type: 'string' }
+      },
+      hiddenTwist: { type: 'string' }
     }
   }
 }
@@ -37,9 +52,7 @@ function readLlmConfig(): LlmConfig | null {
   const envModel = (env.VITE_LLM_MODEL as string | undefined) || 'gpt-4o-mini'
   const envBaseUrl = (env.VITE_LLM_BASE_URL as string | undefined) || 'https://api.openai.com/v1'
 
-  if (envKey) {
-    return { apiKey: envKey, model: envModel, baseUrl: envBaseUrl }
-  }
+  if (envKey) return { apiKey: envKey, model: envModel, baseUrl: envBaseUrl }
 
   const rawLocal = localStorage.getItem('improvTool.llmConfig')
   if (!rawLocal) return null
@@ -62,65 +75,110 @@ function safeJsonExtract(value: string): Record<string, unknown> | null {
   try {
     return JSON.parse(trimmed)
   } catch {
-    const firstBrace = trimmed.indexOf('{')
-    const lastBrace = trimmed.lastIndexOf('}')
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return null
-    const inner = trimmed.slice(firstBrace, lastBrace + 1)
+    const start = trimmed.indexOf('{')
+    const end = trimmed.lastIndexOf('}')
+    if (start === -1 || end === -1 || start >= end) return null
     try {
-      return JSON.parse(inner)
+      return JSON.parse(trimmed.slice(start, end + 1))
     } catch {
       return null
     }
   }
 }
 
+function isStringArray(value: unknown, min: number): value is string[] {
+  return (
+    Array.isArray(value) && value.length >= min && value.every((entry) => typeof entry === 'string')
+  )
+}
+
 function parseStructuredResponse(
   payload: unknown
-): Omit<ImprovGenerationResult, 'usedFallback' | 'diagnostics'> | null {
+): Omit<ImprovDetailResult, 'usedFallback' | 'diagnostics'> | null {
   if (!payload || typeof payload !== 'object') return null
   const typed = payload as Record<string, unknown>
-  const output: Partial<Omit<ImprovGenerationResult, 'usedFallback' | 'diagnostics'>> = {}
 
-  for (const key of RESPONSE_KEYS) {
-    const value = typed[key]
-    if (typeof value !== 'string' || !value.trim()) return null
-    output[key] = value.trim()
+  if (typeof typed.openingDescription !== 'string' || !typed.openingDescription.trim()) return null
+  if (!isStringArray(typed.sensoryDetails, 3)) return null
+  if (!isStringArray(typed.notableFeatures, 3)) return null
+  if (!isStringArray(typed.immediateOpportunities, 2)) return null
+  if (typeof typed.hiddenTwist !== 'string' || !typed.hiddenTwist.trim()) return null
+
+  return {
+    openingDescription: typed.openingDescription.trim(),
+    sensoryDetails: typed.sensoryDetails
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .slice(0, 5),
+    notableFeatures: typed.notableFeatures
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .slice(0, 6),
+    immediateOpportunities: typed.immediateOpportunities
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .slice(0, 4),
+    hiddenTwist: typed.hiddenTwist.trim()
   }
-
-  return output as Omit<ImprovGenerationResult, 'usedFallback' | 'diagnostics'>
 }
 
 function fallbackGenerate(
-  input: TavernScenarioInput,
+  request: ImprovDetailRequest,
   context: ImprovContextEntity[],
   diagnostics: string
-): ImprovGenerationResult {
-  const contextTag = context[0] ? `${context[0].name}` : 'the room'
+): ImprovDetailResult {
+  const subject = request.subject || 'an unplanned location'
+  const hint = context[0]?.name || 'the area'
+
   return {
-    dialogueOpener: `"${input.bartender || 'The barkeep'} wipes a mug and says, 'If you're asking about ${input.rumor || 'trouble'}, buy a drink first.'"`,
-    motive: `${input.suspiciousPatron || 'A nervous patron'} wants leverage over ${contextTag} and will trade information only for protection.`,
-    secret: `${input.complication || 'The tavern staff'} is quietly involved: the rumor points to a staged event, not an accident.`,
-    escalationBeat: `Escalate if players push: ${input.suspiciousPatron || 'the patron'} bolts through the kitchen as armed enforcers enter ${input.tavern || 'the tavern'}.`,
-    fallbackBeat: `If momentum dips, ${input.bartender || 'the bartender'} slides over a marked ledger entry that points to the next lead.`,
+    openingDescription: `The party steps into ${subject}, where the mood is ${request.tone || 'tense'} and everyone seems to be reacting to ${hint}.`,
+    sensoryDetails: [
+      `Smell: stale drink, wet wool, and lamp oil hang in the air.`,
+      `Sound: low conversations cut off whenever strangers move deeper in.`,
+      `Visual: mismatched furnishings and small signs of hurried repairs stand out.`
+    ],
+    notableFeatures: [
+      `A staff member or regular immediately clocks what the players are looking for: ${request.playerIntent || 'answers'}.`,
+      `One corner contains the cleanest sightline, clearly used by someone who watches arrivals.`,
+      `A minor but memorable detail (crest, chalk mark, broken seal) ties this place to wider campaign events.`
+    ],
+    immediateOpportunities: [
+      'A willing local offers a lead if the party helps with a small immediate problem.',
+      'A tense misunderstanding can be defused for information or escalated into a short confrontation.'
+    ],
+    hiddenTwist:
+      request.constraints ||
+      'Someone present is not what they seem and is quietly steering the situation for a third party.',
     usedFallback: true,
     diagnostics
   }
 }
 
-export async function generateTavernImprov(
-  input: TavernScenarioInput,
+export async function generateImprovDetails(
+  request: ImprovDetailRequest,
   contextEntities: ImprovContextEntity[]
-): Promise<ImprovGenerationResult> {
+): Promise<ImprovDetailResult> {
   const config = readLlmConfig()
   if (!config) {
     return fallbackGenerate(
-      input,
+      request,
       contextEntities,
       'No LLM config found (VITE_LLM_* env vars or localStorage improvTool.llmConfig).'
     )
   }
 
-  const prompt = `You are a tabletop GM improv assistant.\nGenerate concise, usable outputs for a live DM.\n\nScenario seeds:\n- Tavern: ${input.tavern}\n- Bartender: ${input.bartender}\n- Suspicious patron: ${input.suspiciousPatron}\n- Rumor: ${input.rumor}\n- Complication: ${input.complication}\n\nWorld facts:\n${formatImprovFacts(contextEntities)}\n\nReturn JSON matching the provided schema.`
+  const prompt = `You are a GM improv assistant that generates concise details DMs can narrate immediately.
+
+Subject players engage with: ${request.subject}
+What players are trying to do: ${request.playerIntent}
+Desired tone: ${request.tone}
+Scope/scale: ${request.scale}
+Constraints to respect: ${request.constraints || 'none'}
+
+World facts:
+${formatImprovFacts(contextEntities)}
+
+Return valid JSON only.`
 
   try {
     const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
@@ -131,16 +189,16 @@ export async function generateTavernImprov(
       },
       body: JSON.stringify({
         model: config.model,
-        temperature: 0.8,
+        temperature: 0.85,
         response_format: {
           type: 'json_schema',
-          json_schema: improvJsonSchema
+          json_schema: detailJsonSchema
         },
         messages: [
           {
             role: 'system',
             content:
-              'Output helpful, table-ready fantasy improv beats grounded in provided facts. Keep each field under 2 sentences.'
+              'Generate practical world details for live play. Avoid dialogue scripting and avoid full scene outlines. Keep each bullet concise.'
           },
           { role: 'user', content: prompt }
         ]
@@ -149,7 +207,7 @@ export async function generateTavernImprov(
 
     if (!response.ok) {
       return fallbackGenerate(
-        input,
+        request,
         contextEntities,
         `LLM request failed: ${response.status} ${response.statusText}`
       )
@@ -161,13 +219,16 @@ export async function generateTavernImprov(
 
     const content = data.choices?.[0]?.message?.content
     if (!content) {
-      return fallbackGenerate(input, contextEntities, 'LLM response missing message content.')
+      return fallbackGenerate(request, contextEntities, 'LLM response missing message content.')
     }
 
-    const parsedJson = safeJsonExtract(content)
-    const parsed = parseStructuredResponse(parsedJson)
+    const parsed = parseStructuredResponse(safeJsonExtract(content))
     if (!parsed) {
-      return fallbackGenerate(input, contextEntities, 'LLM response did not match expected schema.')
+      return fallbackGenerate(
+        request,
+        contextEntities,
+        'LLM response did not match expected schema.'
+      )
     }
 
     return {
@@ -177,6 +238,6 @@ export async function generateTavernImprov(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown request error'
-    return fallbackGenerate(input, contextEntities, `LLM request exception: ${message}`)
+    return fallbackGenerate(request, contextEntities, `LLM request exception: ${message}`)
   }
 }

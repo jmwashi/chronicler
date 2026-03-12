@@ -33,20 +33,20 @@ export interface ImprovContextEntity {
   summary: string
 }
 
-export interface TavernScenarioInput {
-  tavern: string
-  bartender: string
-  suspiciousPatron: string
-  rumor: string
-  complication: string
+export interface ImprovDetailRequest {
+  subject: string
+  playerIntent: string
+  tone: string
+  scale: string
+  constraints: string
 }
 
-export interface ImprovGenerationResult {
-  dialogueOpener: string
-  motive: string
-  secret: string
-  escalationBeat: string
-  fallbackBeat: string
+export interface ImprovDetailResult {
+  openingDescription: string
+  sensoryDetails: string[]
+  notableFeatures: string[]
+  immediateOpportunities: string[]
+  hiddenTwist: string
   usedFallback: boolean
   diagnostics: string
 }
